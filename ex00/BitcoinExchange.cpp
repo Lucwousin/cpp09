@@ -3,10 +3,10 @@
 /*                                                        ::::::::            */
 /*   BitcoinExchange.cpp                                :+:    :+:            */
 /*                                                     +:+                    */
-/*   By: lucas <lucas@student.codam.nl>               +#+                     */
+/*   By: lsinke <lsinke@student.codam.nl>             +#+                     */
 /*                                                   +#+                      */
-/*   Created: 2023/03/25 19:55:10 by lucas         #+#    #+#                 */
-/*   Updated: 2023/03/25 19:55:10 by lucas         ########   odam.nl         */
+/*   Created: 2023/03/25 19:55:10 by lsinke        #+#    #+#                 */
+/*   Updated: 2023/03/25 19:55:10 by lsinke        ########   odam.nl         */
 /*                                                                            */
 /* ************************************************************************** */
 
