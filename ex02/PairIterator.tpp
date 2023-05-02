@@ -181,3 +181,86 @@ template<class Iter>
 bool PairIterator<Iter>::Comp::operator()(const int &v, const PairIterator<Iter> &it) const {
 	return v < *it;
 }
+
+
+// Specializations for sequential iterator
+
+typedef PairIterator<std::list<int>::iterator> SeqPIter;
+
+template<>
+inline const SeqPIter SeqPIter::operator++(int) {
+	PairIterator temp = *this;
+	for (size_t n = _size; n > 0; n--)
+		_it++;
+	return temp;
+}
+
+template<>
+inline const SeqPIter SeqPIter::operator--(int) {
+	PairIterator temp = *this;
+	for (size_t n = _size; n > 0; n--)
+		_it--;
+	return temp;
+}
+
+template<>
+inline SeqPIter &SeqPIter::operator++() {
+	for (size_t n = _size; n > 0; n--)
+		_it++;
+	return *this;
+}
+
+template<>
+inline SeqPIter &SeqPIter::operator--() {
+	for (size_t n = _size; n > 0; n--)
+		_it--;
+	return *this;
+}
+
+template<>
+inline SeqPIter SeqPIter::operator+(diff_t n) const {
+	PairIterator temp = *this;
+
+	if (n < 0)
+		while (n++ != 0)
+			temp++;
+	else
+		while (n-- != 0)
+			temp--;
+
+	return temp;
+}
+
+template<>
+inline SeqPIter SeqPIter::operator-(diff_t n) const {
+	return *this + (-n);
+}
+
+template<>
+inline SeqPIter &SeqPIter::operator+=(diff_t n) {
+	return (*this = *this + n);
+}
+
+template<>
+inline SeqPIter &SeqPIter::operator-=(diff_t n) {
+	return (*this = *this - n);
+}
+
+template<>
+inline void SeqPIter::swap(SeqPIter &other) {
+	std::list<int>::iterator a = _it, b = other._it;
+	for (size_t n = _size; n > 0; n--)
+		std::iter_swap(a++, b++);
+}
+
+/*
+// Ew, don't look at this! We need this to make a PairIterator for list actually implement this overload..
+template<>
+PairIterator<std::list<int>::iterator>::diff_t PairIterator<std::list<int>::iterator>::operator-(const PairIterator<std::list<int>::iterator> &rhs) const {
+	typedef PairIterator<std::list<int>::iterator> iter_t;
+	diff_t diff = 0;
+
+	for (iter_t it = *this; it != rhs; it--) {
+		++diff;
+	}
+}*/

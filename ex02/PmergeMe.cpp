@@ -11,7 +11,6 @@
 /* ************************************************************************** */
 
 #include <PmergeMe.hpp>
-#include <PairIterator.hpp>
 #include <sstream>
 #include <iostream>
 #include <algorithm>
@@ -51,22 +50,10 @@ PmergeMe &PmergeMe::operator=(const PmergeMe &other) {
 	return *this;
 }
 
-template<typename Iter>
-static void sort_pairs(const PairIterator<Iter> &begin, const PairIterator<Iter> &end) {
-	for (PairIterator<Iter> a = begin, b = a + 1; b < end; a += 2, b += 2)
-		if (*a > *b)
-			a.swap(b);
-}
-
-template<typename Iter>
-static std::vector<PairIterator<Iter> > get_sorted(const PairIterator<Iter> &begin, const PairIterator<Iter> &end) {
-	std::vector<PairIterator<Iter> > sorted;
-	sorted.reserve(end - begin);
-
-	for (PairIterator<Iter> cur = begin; cur < (end - 1); cur += 2)
-		sorted.push_back(cur);
-
-	return sorted;
+template<typename Iter, typename OIter>
+static void get_sorted(const Iter &begin, const Iter &end, OIter dst) {
+	for (Iter cur = begin; cur != end; cur += 2)
+		*dst++ = cur;
 }
 
 template<class SortedType>
@@ -93,11 +80,11 @@ static const size_t jacobsthal_lens[] = {
 	1537228672809129216u, 3074457345618258432u, 6148914691236516864u
 };
 
-template<typename SortedType>
-static void insert_values(SortedType &sorted, const PairIterator<VecIter> &begin, const PairIterator<VecIter> &end, bool odd) {
-	typedef PairIterator<VecIter>::diff_t diff_t; // sneaky typedef
+template<typename SortedType, typename Iter>
+static void insert_values(SortedType &sorted, const Iter &begin, const Iter &end, bool odd) {
+	typedef typename Iter::diff_t diff_t; // sneaky typedef
 
-	PairIterator<VecIter> cur = end - 1;
+	Iter cur = end - 1;
 
 	if (cur <= begin)
 		return;
@@ -134,14 +121,13 @@ static std::vector<int> move_values(std::vector<PairIterator<VecIter> > &sorted,
 	return temp;
 }
 
-void PmergeMe::mergeInsertVec(size_t length, size_t pair_size) {
+template<typename Iter>
+static void merge_insert_list(const PairIterator<Iter> &begin, const PairIterator<Iter> &end) {
+	const size_t length = std::distance(begin, end);
 	const bool odd = length % 2;
 
 	if (length < 2)
 		return;
-
-	const PairIterator<VecIter> begin(_vec.begin(), pair_size);
-	const PairIterator<VecIter> end = begin + (PairIterator<VecIter>::diff_t) (length - odd);
 
 	// By viewing the container through a "PairIterator" we've pretty much split
 	// it up into <length> values. The iterator only gets the first value in the
@@ -149,31 +135,111 @@ void PmergeMe::mergeInsertVec(size_t length, size_t pair_size) {
 	// I totally did not get this idea from https://codereview.stackexchange.com/questions/116367/ford-johnson-merge-insertion-sort
 
 	// Sort these pairs
-	sort_pairs(begin, end);
+	sort_pairs(begin, end - odd);
 
 	// Recursively sort the smaller value of each pair (by just widening our "view")
-	mergeInsertVec(length / 2, pair_size * 2);
+	merge_insert_list(PairIterator<Iter>(begin.base(), begin.size() * 2),
+					  PairIterator<Iter>((begin + length).base(), begin.size() * 2));
 
 	// Time to add all recursively sorted values to a sorted array
-	std::vector<PairIterator<VecIter> > sorted = get_sorted(begin, end);
+	std::vector<PairIterator<Iter> > sorted = get_sorted(begin, end);
 
 	// And now insert the values that are matched with the sorted values
 	insert_values(sorted, begin, end, odd);
 
 	// Now move all the values to a temporary array and back into the main vector
 	// we can't just assign to _vec, as sorted does not contain any "odd" values
-	std::vector<int> tmp = move_values(sorted, _vec.size());
+	//std::vector<int> tmp = move_values(sorted, _vec.size());
+	//std::copy(tmp.begin(), tmp.end(), _vec.begin());
+}
+
+// Vector specific implementation (would work for deque as well!)
+template<typename Iter>
+static void sort_pairs_contiguous(const Iter &begin, const Iter &end) {
+	for (Iter a = begin, b = a + 1; b < end; a += 2, b += 2)
+		if (*a > *b)
+			a.swap(b);
+}
+
+void PmergeMe::mergeInsert(const VecPIter &begin, const VecPIter &end) {
+	const size_t length = end - begin;
+	const bool odd = length % 2;
+	const VecPIter actual_end = end - odd;
+
+	if (length < 2)
+		return;
+
+	// By viewing the container through a "PairIterator" we've pretty much split
+	// it up into <length> values. The iterator only gets the first value in the
+	// <pair_size> sized chunks of container, but it is able to swap all of them
+	// I totally did not get this idea from https://codereview.stackexchange.com/questions/116367/ford-johnson-merge-insertion-sort
+
+	// Sort these pairs
+	sort_pairs_contiguous(begin, actual_end);
+
+	// Recursively sort the smaller value of each pair (by just widening our "view")
+	mergeInsert(
+			VecPIter(begin.base(), begin.size() * 2),
+			VecPIter(actual_end.base(), begin.size() * 2));
+
+	// Time to add all recursively sorted values to a sorted array
+	std::vector<PairIterator<VecIter> > sorted;
+	sorted.reserve(length);
+
+	get_sorted(begin, actual_end, std::back_inserter(sorted));
+
+	// And now insert the values that are matched with the sorted values
+	insert_values(sorted, begin, actual_end, odd);
+
+	// Now move all the values to a temporary array and back into the main vector
+	// we can't just assign to _vec, as sorted does not contain any "odd" values
+	std::vector<int> tmp = move_values(sorted, _size);
 	std::copy(tmp.begin(), tmp.end(), _vec.begin());
 }
 
-clock_t PmergeMe::sortVec() {
-	std::clock_t start = clock();
+// List specific implementation
 
-	_vec.reserve(_size);
+template<typename Iter>
+static bool sort_pairs_sequential(const Iter &begin, const Iter &end) {
+	for (Iter cur = begin; cur != end; cur += 2) {
+		Iter next = cur + 1;
+		if (next == end)
+			return true;
+		if (*cur > *next)
+			cur.swap(next);
+	}
+	return false;
+}
+
+void PmergeMe::mergeInsert(const ListPIter &begin, const ListPIter &end) {
+
+	if (end == begin + 1)
+		return;
+
+	// ruh roh, we can't use any pointer arithmetic to figure out our length or if we're odd!
+	// Let's just sort pairs and store our odd-ness and the odd value afterwards
+	const bool odd = sort_pairs_sequential(begin, end);
+	const ListPIter actual_end = end - odd;
+
+	// Again, recursively sort
+	mergeInsert(
+			ListPIter(begin.base(), begin.size() * 2),
+			ListPIter(actual_end.base(), begin.size() * 2));
+
+	// Again, get all sorted values...
+	std::list<ListPIter> sorted;
+	get_sorted(begin, actual_end, std::back_inserter(sorted));
+}
+
+template<class Container>
+clock_t PmergeMe::sortContainer(Container &c) {
+	const clock_t start = clock();
+
 	for (size_t i = 0; i < _size; i++)
-		_vec.push_back(_values[i]);
+		c.push_back(_values[i]);
 
-	mergeInsertVec(_size, 1);
+	typedef typename Container::iterator Iter;
+	mergeInsert(PairIterator<Iter>(c.begin(), 1), PairIterator<Iter>(c.end(), 1));
 
 	return clock() - start;
 }
@@ -187,7 +253,7 @@ static void print_time(const std::string &str, clock_t cycles) {
 }
 
 void PmergeMe::sort() {
-	clock_t vec_time = sortVec();
+	clock_t vec_time = sortContainer(_vec);
 	//clock_t deq_time = sortDeq();
 
 	/*if (!std::is_sorted(_vec.begin(), _vec.end()))
