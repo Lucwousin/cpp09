@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 #pragma once
+#include <list>
 
 // Ctors/dtors and all that
 
@@ -51,13 +52,17 @@ size_t PairIterator<Iter>::size() const {
 
 template<class Iter>
 void PairIterator<Iter>::swap(PairIterator<Iter> &other) {
-	std::swap_ranges(_it, _it + _size, other._it);
+	Iter end = _it;
+	std::advance(end, _size);
+	std::swap_ranges(_it, end, other._it);
 }
 
 template<class Iter>
 template<typename OIter>
 void PairIterator<Iter>::copy(OIter dst) {
-	std::copy(base(), _it + _size, dst);
+	Iter end = _it;
+	std::advance(end, _size);
+	std::copy(_it, end, dst);
 }
 
 // Operator overloads ahead
@@ -65,43 +70,45 @@ void PairIterator<Iter>::copy(OIter dst) {
 template<class Iter>
 const PairIterator<Iter> PairIterator<Iter>::operator++(int) {
 	PairIterator temp = *this;
-	_it += _size;
+	std::advance(_it, _size);
 	return temp;
 }
 
 template<class Iter>
 const PairIterator<Iter> PairIterator<Iter>::operator--(int) {
 	PairIterator temp = *this;
-	_it -= _size;
+	std::advance(_it, - (diff_t) _size);
 	return temp;
 }
 
 template<class Iter>
 PairIterator<Iter> &PairIterator<Iter>::operator++() {
-	_it += _size;
+	std::advance(_it, _size);
 	return *this;
 }
 
 
 template<class Iter>
 PairIterator<Iter> &PairIterator<Iter>::operator--() {
-	_it -= _size;
+	std::advance(_it, - (diff_t) _size);
 	return *this;
 }
 
 template<class Iter>
 PairIterator<Iter> PairIterator<Iter>::operator+(diff_t n) const {
-	return PairIterator(_it + n * _size, _size);
+	Iter tmp = _it;
+	std::advance(tmp, n * (diff_t) _size);
+	return PairIterator(tmp, _size);
 }
 
 template<class Iter>
 PairIterator<Iter> PairIterator<Iter>::operator-(diff_t n) const {
-	return PairIterator(_it - n * _size, _size);
+	return operator+(-n);
 }
 
 template<class Iter>
 PairIterator<Iter> &PairIterator<Iter>::operator+=(diff_t n) {
-	_it += n * _size;
+	*this = operator+(n);
 	return *this;
 }
 
@@ -187,63 +194,15 @@ bool PairIterator<Iter>::Comp::operator()(const int &v, const PairIterator<Iter>
 
 typedef PairIterator<std::list<int>::iterator> SeqPIter;
 
+// warning: do not try to subtract a bigger iterator from a smaller one
+// also lol linear
 template<>
-inline const SeqPIter SeqPIter::operator++(int) {
-	PairIterator temp = *this;
-	for (size_t n = _size; n > 0; n--)
-		_it++;
-	return temp;
-}
-
-template<>
-inline const SeqPIter SeqPIter::operator--(int) {
-	PairIterator temp = *this;
-	for (size_t n = _size; n > 0; n--)
-		_it--;
-	return temp;
-}
-
-template<>
-inline SeqPIter &SeqPIter::operator++() {
-	for (size_t n = _size; n > 0; n--)
-		_it++;
-	return *this;
-}
-
-template<>
-inline SeqPIter &SeqPIter::operator--() {
-	for (size_t n = _size; n > 0; n--)
-		_it--;
-	return *this;
-}
-
-template<>
-inline SeqPIter SeqPIter::operator+(diff_t n) const {
-	PairIterator temp = *this;
-
-	if (n < 0)
-		while (n++ != 0)
-			temp++;
-	else
-		while (n-- != 0)
-			temp--;
-
-	return temp;
-}
-
-template<>
-inline SeqPIter SeqPIter::operator-(diff_t n) const {
-	return *this + (-n);
-}
-
-template<>
-inline SeqPIter &SeqPIter::operator+=(diff_t n) {
-	return (*this = *this + n);
-}
-
-template<>
-inline SeqPIter &SeqPIter::operator-=(diff_t n) {
-	return (*this = *this - n);
+inline SeqPIter::diff_t SeqPIter::operator-(const SeqPIter &rhs) const {
+	diff_t n = 0;
+	for (SeqPIter tmp = *this; rhs != tmp; --tmp) {
+		++n;
+	}
+	return n;
 }
 
 template<>
@@ -252,15 +211,3 @@ inline void SeqPIter::swap(SeqPIter &other) {
 	for (size_t n = _size; n > 0; n--)
 		std::iter_swap(a++, b++);
 }
-
-/*
-// Ew, don't look at this! We need this to make a PairIterator for list actually implement this overload..
-template<>
-PairIterator<std::list<int>::iterator>::diff_t PairIterator<std::list<int>::iterator>::operator-(const PairIterator<std::list<int>::iterator> &rhs) const {
-	typedef PairIterator<std::list<int>::iterator> iter_t;
-	diff_t diff = 0;
-
-	for (iter_t it = *this; it != rhs; it--) {
-		++diff;
-	}
-}*/

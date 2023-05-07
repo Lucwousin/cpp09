@@ -13,6 +13,7 @@
 #include <PmergeMe.hpp>
 #include <PairIterator.hpp>
 #include <iostream>
+#include <vector>
 
 void test_iterator() {
 	std::vector<int> vec;
@@ -33,6 +34,10 @@ void test_iterator() {
 
 int main(int argc, char **argv) {
 	// test_iterator();
-	PmergeMe m = PmergeMe(argc, argv);
-	m.sort();
+	try {
+		PmergeMe m = PmergeMe(argc, argv);
+		m.sort();
+	} catch (const std::invalid_argument &err) {
+		std::cerr << "Invalid argument: " << err.what() << std::endl;
+	}
 }

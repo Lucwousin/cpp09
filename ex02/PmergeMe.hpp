@@ -12,19 +12,9 @@
 
 #pragma once
 
-#include <vector>
-#include <deque>
-#include <list>
 #include <ctime>
-#include <PairIterator.hpp>
 
-#define MAX_VALUES 50000
-
-typedef std::vector<int>::iterator VecIter;
-typedef PairIterator<VecIter> VecPIter;
-
-typedef std::list<int>::iterator ListIter;
-typedef PairIterator<ListIter> ListPIter;
+#define MAX_VALUES 25000
 
 class PmergeMe {
 	private:
@@ -32,14 +22,12 @@ class PmergeMe {
 
 		size_t _size;
 		int _values[MAX_VALUES];
-		std::vector<int> _vec;
-		std::deque<int> _deq;
 
-		template<class Container>
-		clock_t sortContainer(Container &c);
+		template<typename A, template <typename, typename> class Container>
+		clock_t sortContainer(Container<int, A> &c);
 
-		void mergeInsert(const VecPIter &begin, const VecPIter &end);
-		void mergeInsert(const ListPIter &begin, const ListPIter &end);
+		template<typename A, template <typename, typename> class Container, typename Iter>
+		void mergeInsert(Container<int, A> &container, const Iter &begin, const Iter &end);
 
 	public:
 		PmergeMe(int argc, char **argv);

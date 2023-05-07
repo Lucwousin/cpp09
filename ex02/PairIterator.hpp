@@ -13,7 +13,6 @@
 #pragma once
 
 #include <cstddef>
-#include <iterator>
 
 template<class Iter>
 class PairIterator {

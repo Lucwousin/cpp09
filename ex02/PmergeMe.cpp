@@ -11,13 +11,18 @@
 /* ************************************************************************** */
 
 #include <PmergeMe.hpp>
+#include <PairIterator.hpp>
 #include <sstream>
 #include <iostream>
 #include <algorithm>
+#include <vector>
+#include <deque>
 
 PmergeMe::PmergeMe(int argc, char **argv): _size(argc - 1), _values() {
-	if (_size > MAX_VALUES + 1)
-		throw std::invalid_argument("Too many values!\n");
+	if (_size == 0)
+		throw std::invalid_argument("Not enough values!");
+	if (_size > MAX_VALUES)
+		throw std::invalid_argument("Too many values!");
 	for (int i = 1; i < argc; i++) {
 		std::istringstream stream(argv[i]);
 		if (!(stream >> _values[i - 1]) || _values[i - 1] < 0) {
@@ -42,8 +47,6 @@ PmergeMe::~PmergeMe() {}
 PmergeMe &PmergeMe::operator=(const PmergeMe &other) {
 	if (this != &other) {
 		_size = other._size;
-		_vec = other._vec;
-		_deq = other._deq;
 		for (size_t i = 0; i < other._size; i++)
 			_values[i] = other._values[i];
 	}
@@ -56,12 +59,16 @@ static void get_sorted(const Iter &begin, const Iter &end, OIter dst) {
 		*dst++ = cur;
 }
 
-template<class SortedType>
-static void insert_value(SortedType &sorted, const PairIterator<VecIter> value, size_t search_size) {
-	typedef typename SortedType::iterator s_iter;
+template<typename Container, typename Iter>
+static void insert_value(Container &sorted, const Iter value, size_t search_size, size_t &sorted_size) {
+	typedef typename Container::iterator s_iter;
 
-	s_iter search_start = (search_size >= sorted.size()) ? sorted.begin() : sorted.end() - search_size;
-	s_iter insertion_point = std::lower_bound(search_start, sorted.end(), *value, PairIterator<VecIter>::Comp());
+	s_iter search;
+	if (sorted_size++ <= search_size)
+		search = sorted.begin();
+	else
+		search = sorted.end(), std::advance(search, -search_size);
+	s_iter insertion_point = std::lower_bound(search, sorted.end(), *value, typename Iter::Comp());
 
 	sorted.insert(insertion_point, value);
 }
@@ -80,93 +87,69 @@ static const size_t jacobsthal_lens[] = {
 	1537228672809129216u, 3074457345618258432u, 6148914691236516864u
 };
 
-template<typename SortedType, typename Iter>
-static void insert_values(SortedType &sorted, const Iter &begin, const Iter &end, bool odd) {
+template<typename Container, typename Iter>
+static void insert_values(Container &sorted, const Iter &begin, const Iter &end, bool odd) {
 	typedef typename Iter::diff_t diff_t; // sneaky typedef
 
 	Iter cur = end - 1;
 
-	if (cur <= begin)
-		return;
 	// Always add the highest value to the end first, it'll always be larger than everything sorted
 	sorted.push_back(cur);
 
+	diff_t values_left = (cur - begin + 1) / 2 - 1;
+	if (values_left <= 0 && !odd)
+		return;
+
+	size_t sorted_size = sorted.size();
+
 	// After this you would usually perform a binary search only up to the index of the smallest value of every pair
 	// I'm settling for the worst-case performance every time though, as inserting into a vector invalidates most iterators
-	// and not dealing with this greatly decreases complexity
-	for (int jacob_idx = 0; cur > begin + 1; jacob_idx++) {
+	// and not dealing with this greatly decreases complexity. List iterators also don't even use binary search for
+	// std::lower_bound, so the gain there would be minimal as well (if only we could use both containers at the same time...)
+	for (int jacob_idx = 0; values_left > 0; jacob_idx++) {
 		const size_t search_size = (2 << (jacob_idx + 1)) - 1; // 3, 7, 15, 31 ...
-		const size_t values_left = (cur - begin + 1) / 2 - 1;
 
-		const diff_t amt_to_insert = (diff_t) std::min(values_left, jacobsthal_lens[jacob_idx]);
+		const diff_t amt_to_insert = std::min(values_left, (diff_t) jacobsthal_lens[jacob_idx]);
 
 		cur -= amt_to_insert * 2;
+		values_left -= amt_to_insert;
 
-		for (diff_t i = 0; i < amt_to_insert; i++)
-			insert_value(sorted, cur + 2 * i, search_size);
+		Iter tmp = cur;
+		for (diff_t i = 0; i < amt_to_insert; i++) {
+			insert_value(sorted, tmp, search_size, sorted_size);
+			tmp += 2;
+		}
 	}
 
 	// Finally add the last value if there was one
 	if (odd)
-		insert_value(sorted, end, sorted.size());
+		insert_value(sorted, end, sorted_size, sorted_size);
 }
 
-static std::vector<int> move_values(std::vector<PairIterator<VecIter> > &sorted, const size_t size) {
-	std::vector<int> temp;
-	temp.reserve(size);
+template<typename Container, typename Sorted>
+static void move_values(Sorted &sorted, Container &dst) {
+	typedef typename Sorted::iterator iter;
 
-	for (std::vector<PairIterator<VecIter> >::iterator it = sorted.begin(); it < sorted.end(); it++)
-		it->copy(std::back_inserter(temp));
-
-	return temp;
+	for (iter it = sorted.begin(); it != sorted.end(); it++)
+		it->copy(std::back_inserter(dst));
 }
 
 template<typename Iter>
-static void merge_insert_list(const PairIterator<Iter> &begin, const PairIterator<Iter> &end) {
-	const size_t length = std::distance(begin, end);
-	const bool odd = length % 2;
+static bool sort_pairs(const Iter &begin, const Iter &end) {
+	Iter a, b;
 
-	if (length < 2)
-		return;
-
-	// By viewing the container through a "PairIterator" we've pretty much split
-	// it up into <length> values. The iterator only gets the first value in the
-	// <pair_size> sized chunks of container, but it is able to swap all of them
-	// I totally did not get this idea from https://codereview.stackexchange.com/questions/116367/ford-johnson-merge-insertion-sort
-
-	// Sort these pairs
-	sort_pairs(begin, end - odd);
-
-	// Recursively sort the smaller value of each pair (by just widening our "view")
-	merge_insert_list(PairIterator<Iter>(begin.base(), begin.size() * 2),
-					  PairIterator<Iter>((begin + length).base(), begin.size() * 2));
-
-	// Time to add all recursively sorted values to a sorted array
-	std::vector<PairIterator<Iter> > sorted = get_sorted(begin, end);
-
-	// And now insert the values that are matched with the sorted values
-	insert_values(sorted, begin, end, odd);
-
-	// Now move all the values to a temporary array and back into the main vector
-	// we can't just assign to _vec, as sorted does not contain any "odd" values
-	//std::vector<int> tmp = move_values(sorted, _vec.size());
-	//std::copy(tmp.begin(), tmp.end(), _vec.begin());
-}
-
-// Vector specific implementation (would work for deque as well!)
-template<typename Iter>
-static void sort_pairs_contiguous(const Iter &begin, const Iter &end) {
-	for (Iter a = begin, b = a + 1; b < end; a += 2, b += 2)
+	for (a = begin, b = a + 1; a != end && b != end; a += 2, b += 2) {
 		if (*a > *b)
 			a.swap(b);
+	}
+	return (b == end);
 }
 
-void PmergeMe::mergeInsert(const VecPIter &begin, const VecPIter &end) {
-	const size_t length = end - begin;
-	const bool odd = length % 2;
-	const VecPIter actual_end = end - odd;
+// List specific implementation
+template<typename A, template <typename, typename> class Container, typename Iter>
+void PmergeMe::mergeInsert(Container<int, A> &container, const Iter &begin, const Iter &end) {
 
-	if (length < 2)
+	if (end == begin + 1)
 		return;
 
 	// By viewing the container through a "PairIterator" we've pretty much split
@@ -174,74 +157,54 @@ void PmergeMe::mergeInsert(const VecPIter &begin, const VecPIter &end) {
 	// <pair_size> sized chunks of container, but it is able to swap all of them
 	// I totally did not get this idea from https://codereview.stackexchange.com/questions/116367/ford-johnson-merge-insertion-sort
 
-	// Sort these pairs
-	sort_pairs_contiguous(begin, actual_end);
+	// Sort all pairs (this returns oddness as checking the length of a std::list is linear
+	const bool odd = sort_pairs(begin, end);
+	const Iter actual_end = end - odd;
 
 	// Recursively sort the smaller value of each pair (by just widening our "view")
-	mergeInsert(
-			VecPIter(begin.base(), begin.size() * 2),
-			VecPIter(actual_end.base(), begin.size() * 2));
+	mergeInsert(container,
+			Iter(begin.base(), begin.size() * 2),
+			Iter(actual_end.base(), begin.size() * 2));
 
-	// Time to add all recursively sorted values to a sorted array
-	std::vector<PairIterator<VecIter> > sorted;
-	sorted.reserve(length);
-
+	// Get all sorted values...
+	Container<Iter, A> sorted;
 	get_sorted(begin, actual_end, std::back_inserter(sorted));
 
 	// And now insert the values that are matched with the sorted values
 	insert_values(sorted, begin, actual_end, odd);
 
-	// Now move all the values to a temporary array and back into the main vector
-	// we can't just assign to _vec, as sorted does not contain any "odd" values
-	std::vector<int> tmp = move_values(sorted, _size);
-	std::copy(tmp.begin(), tmp.end(), _vec.begin());
+	// Now move all the values to a temporary container and back into the main one
+	// we can't just assign to container, as sorted does not contain any "odd" values
+	Container<int, A> tmp;
+	move_values(sorted, tmp);
+	std::copy(tmp.begin(), tmp.end(), container.begin());
 }
-
-// List specific implementation
 
 template<typename Iter>
-static bool sort_pairs_sequential(const Iter &begin, const Iter &end) {
-	for (Iter cur = begin; cur != end; cur += 2) {
-		Iter next = cur + 1;
-		if (next == end)
-			return true;
-		if (*cur > *next)
-			cur.swap(next);
+static bool is_sorted(Iter begin, Iter end) {
+	for (Iter a = begin, b = ++begin; b != end; ++a, ++b) {
+		if (*a > *b) {
+			return false;
+		}
 	}
-	return false;
+	return true;
 }
 
-void PmergeMe::mergeInsert(const ListPIter &begin, const ListPIter &end) {
-
-	if (end == begin + 1)
-		return;
-
-	// ruh roh, we can't use any pointer arithmetic to figure out our length or if we're odd!
-	// Let's just sort pairs and store our odd-ness and the odd value afterwards
-	const bool odd = sort_pairs_sequential(begin, end);
-	const ListPIter actual_end = end - odd;
-
-	// Again, recursively sort
-	mergeInsert(
-			ListPIter(begin.base(), begin.size() * 2),
-			ListPIter(actual_end.base(), begin.size() * 2));
-
-	// Again, get all sorted values...
-	std::list<ListPIter> sorted;
-	get_sorted(begin, actual_end, std::back_inserter(sorted));
-}
-
-template<class Container>
-clock_t PmergeMe::sortContainer(Container &c) {
+template<typename A, template <typename, typename> class Container>
+clock_t PmergeMe::sortContainer(Container<int, A> &c) {
 	const clock_t start = clock();
 
 	for (size_t i = 0; i < _size; i++)
 		c.push_back(_values[i]);
 
-	typedef typename Container::iterator Iter;
-	mergeInsert(PairIterator<Iter>(c.begin(), 1), PairIterator<Iter>(c.end(), 1));
+	typedef typename Container<int, A>::iterator Iter;
+	mergeInsert(c, PairIterator<Iter>(c.begin(), 1), PairIterator<Iter>(c.end(), 1));
 
-	return clock() - start;
+	const clock_t duration = clock() - start;
+	if (!is_sorted(c.begin(), c.end()))
+		std::cerr << "Failed to sort container!\n";
+
+	return duration;
 }
 
 static void print_time(const std::string &str, clock_t cycles) {
@@ -253,16 +216,20 @@ static void print_time(const std::string &str, clock_t cycles) {
 }
 
 void PmergeMe::sort() {
-	clock_t vec_time = sortContainer(_vec);
-	//clock_t deq_time = sortDeq();
+	std::vector<int> vec;
+	std::list<int> lst;
+	std::deque<int> deq;
 
-	/*if (!std::is_sorted(_vec.begin(), _vec.end()))
-		std::cerr << "Something went wrong when sorting with a vector - it's not sorted!\n";*/
+	clock_t vec_time = sortContainer(vec);
+	clock_t lst_time = sortContainer(lst);
+	clock_t deq_time = sortContainer(deq);
 
 	std::cout << "Sorted: ";
-	for (VecIter i = _vec.begin(); i < _vec.end(); i++)
+	for (std::vector<int>::iterator i = vec.begin(); i < vec.end(); i++)
 		std::cout << *i << ' ';
 	std::cout << std::endl;
 
 	print_time("Vector duration: ", vec_time);
+	print_time("List duration:   ", lst_time);
+	print_time("Deque duration:  ", deq_time);
 }
