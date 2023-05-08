@@ -13,7 +13,8 @@
 #include <BitcoinExchange.hpp>
 #include <iostream>
 
-static void test() {
+void test() {
+	std::cerr << "\nTesting nonexisting db and nonexisting input" << '\n';
 	try {
 		BitcoinExchange exchange("invalid");
 	} catch (std::ios_base::failure const &ex) {
@@ -40,5 +41,5 @@ int main(int argc, char **argv) {
 		std::cerr << "Error: " << ex.what() << '\n';
 	}
 
-	test();
+	// test();
 }

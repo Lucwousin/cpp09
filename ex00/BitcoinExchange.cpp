@@ -128,7 +128,7 @@ void BitcoinExchange::applyExchangeRate(const char *file) {
 
 		BtcDatabase::iterator rate = _database.upper_bound(date);
 		if (rate == _database.end()) {
-			std::cerr << "Error: No date before : " << date << "\n";
+			std::cerr << "Error: No date before: " << date << "\n";
 			continue;
 		}
 
