@@ -145,9 +145,8 @@ static bool sort_pairs(const Iter &begin, const Iter &end) {
 	return (b == end);
 }
 
-// List specific implementation
-template<typename A, template <typename, typename> class Container, typename Iter>
-void PmergeMe::mergeInsert(Container<int, A> &container, const Iter &begin, const Iter &end) {
+template<template <typename, typename> class Container, typename Iter>
+void PmergeMe::mergeInsert(Container<int, std::allocator<int> > &container, const Iter &begin, const Iter &end) {
 
 	if (end == begin + 1)
 		return;
@@ -167,7 +166,7 @@ void PmergeMe::mergeInsert(Container<int, A> &container, const Iter &begin, cons
 			Iter(actual_end.base(), begin.size() * 2));
 
 	// Get all sorted values...
-	Container<Iter, A> sorted;
+	Container<Iter, std::allocator<Iter> > sorted;
 	get_sorted(begin, actual_end, std::back_inserter(sorted));
 
 	// And now insert the values that are matched with the sorted values
@@ -175,13 +174,14 @@ void PmergeMe::mergeInsert(Container<int, A> &container, const Iter &begin, cons
 
 	// Now move all the values to a temporary container and back into the main one
 	// we can't just assign to container, as sorted does not contain any "odd" values
-	Container<int, A> tmp;
+	Container<int, std::allocator<int> > tmp;
 	move_values(sorted, tmp);
 	std::copy(tmp.begin(), tmp.end(), container.begin());
 }
 
+// need to add ft_ as cluster macs have a weird is_sorted version which algorithms lib on linux does not
 template<typename Iter>
-static bool is_sorted(Iter begin, Iter end) {
+static bool ft_is_sorted(Iter begin, Iter end) {
 	for (Iter a = begin, b = ++begin; b != end; ++a, ++b) {
 		if (*a > *b) {
 			return false;
@@ -190,18 +190,18 @@ static bool is_sorted(Iter begin, Iter end) {
 	return true;
 }
 
-template<typename A, template <typename, typename> class Container>
-clock_t PmergeMe::sortContainer(Container<int, A> &c) {
+template<class Container>
+clock_t PmergeMe::sortContainer(Container &c) {
 	const clock_t start = clock();
 
 	for (size_t i = 0; i < _size; i++)
 		c.push_back(_values[i]);
 
-	typedef typename Container<int, A>::iterator Iter;
+	typedef typename Container::iterator Iter;
 	mergeInsert(c, PairIterator<Iter>(c.begin(), 1), PairIterator<Iter>(c.end(), 1));
 
 	const clock_t duration = clock() - start;
-	if (!is_sorted(c.begin(), c.end()))
+	if (!ft_is_sorted(c.begin(), c.end()))
 		std::cerr << "Failed to sort container!\n";
 
 	return duration;

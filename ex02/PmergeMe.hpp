@@ -13,6 +13,7 @@
 #pragma once
 
 #include <ctime>
+#include <memory>
 
 #define MAX_VALUES 25000
 
@@ -23,11 +24,11 @@ class PmergeMe {
 		size_t _size;
 		int _values[MAX_VALUES];
 
-		template<typename A, template <typename, typename> class Container>
-		clock_t sortContainer(Container<int, A> &c);
+		template<class Container>
+		clock_t sortContainer(Container &c);
 
-		template<typename A, template <typename, typename> class Container, typename Iter>
-		void mergeInsert(Container<int, A> &container, const Iter &begin, const Iter &end);
+		template<template <typename, typename> class Container, typename Iter>
+		void mergeInsert(Container<int, std::allocator<int> > &container, const Iter &begin, const Iter &end);
 
 	public:
 		PmergeMe(int argc, char **argv);
