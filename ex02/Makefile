@@ -15,7 +15,7 @@ NAME := PmergeMe
 CC = c++
 
 CFLAGS += -Wall -Werror -Wextra -I.
-CFLAGS += -std=c++98 -g -Og
+CFLAGS += -std=c++98 #-O3 -flto -march=native # optimization flags?! sure
 
 SRCS :=	main.cpp				\
 		PmergeMe.cpp
