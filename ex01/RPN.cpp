@@ -62,8 +62,21 @@ static bool useOperator(std::stack<int> &stack, const char op) {
 	}
 }
 
+static bool is_operator(const char &c) {
+	switch (c) {
+		case '+':
+		case '-':
+		case '*':
+		case '/':
+			return true;
+		default:
+			std::cerr << "Unexpected character: " << c << '\n';
+			return false;
+	}
+}
+
 void RPN::solve(const std::string &input) {
-	std::stack<int> stack; // todo: check container type i need to make this
+	std::stack<int> stack;
 	std::istringstream stream(input);
 
 	while (!stream.eof()) {
@@ -74,7 +87,7 @@ void RPN::solve(const std::string &input) {
 			continue;
 		if (isdigit(c))
 			stack.push(c - '0');
-		else if (!useOperator(stack, c))
+		else if (!is_operator(c) || !useOperator(stack, c))
 			return;
 		if (stream.peek() != ' ' && !stream.eof())
 			std::cerr << "Unexpected character: " << (char) stream.peek() << "\n";
